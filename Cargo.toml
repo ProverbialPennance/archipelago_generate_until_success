@@ -1,0 +1,15 @@
+[package]
+name = "archipelago_generate_until_success"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.97"
+clap = { version = "4.5.32", features = ["derive"] }
+dirs = "6.0.0"
+dotenvy = "0.15.7"
+tracing = { version = "0.1.41" }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+
+[target.'cfg(unix)'.dependencies]
+tracing-journald = "0.3.1"
