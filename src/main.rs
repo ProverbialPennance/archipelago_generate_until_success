@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{self, Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc};
 use std::time::Duration;
@@ -87,9 +87,10 @@ fn main() -> Result<()> {
                 debug!("timed out on receiving message from worker threads");
             }
             debug!("parking");
-            thread::park_timeout(Duration::from_secs(10));
+            thread::park_timeout(Duration::from_secs(5));
         }
-        info!("successfully generated a multiworld, should be exiting...");
+        info!("successfully generated a multiworld, forcefully exiting...");
+        process::exit(0);
     }));
 
     let count_zips_closure = || how_many_zips(&archipelago_dir);
