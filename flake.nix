@@ -64,9 +64,9 @@
       in rec {
         formatter = pkgs.alejandra;
 
-        apps.default = flake-utils.lib.mkApp {
-          drv = packages.default;
-        };
+        # apps.default = flake-utils.lib.mkApp {
+        #   drv = packages.default;
+        # };
         packages.default = rust-project;
         devShells.default = pkgs.mkShell {
           buildInputs = with pkgs; [];
