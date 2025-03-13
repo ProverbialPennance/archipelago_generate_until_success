@@ -19,13 +19,29 @@ use tracing_subscriber::{fmt, EnvFilter, Registry};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long, value_name = "N", help = "how many worker processess will be spawned", default_value = "16")]
+    #[arg(
+        short,
+        long,
+        value_name = "N",
+        help = "how many worker processess will be spawned",
+        default_value = "16"
+    )]
     jobs: Option<u8>,
 
-    #[arg(short = 'd', long = "dir", value_name = "DIR", help = "the target directory of generate.py")]
+    #[arg(
+        short = 'd',
+        long = "dir",
+        value_name = "DIR",
+        help = "the target directory of generate.py"
+    )]
     generated_zip_dir: Option<PathBuf>,
 
-    #[arg(short = 'c', long = "cmd", value_name = "CMD", help = "a path or command that can be used to invoke the archipelago launcher")]
+    #[arg(
+        short = 'c',
+        long = "cmd",
+        value_name = "CMD",
+        help = "a path or command that can be used to invoke the archipelago launcher"
+    )]
     bin: Option<String>,
 }
 
