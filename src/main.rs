@@ -1,8 +1,7 @@
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::{self, Child, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc};
+use std::sync::mpsc;
 use std::time::Duration;
 use std::{fs, thread};
 
@@ -69,30 +68,22 @@ fn main() -> Result<()> {
 
     let (ziptx, ziprx) = mpsc::sync_channel::<usize>(4_usize * jobs as usize);
 
-    let cancel = Arc::new(AtomicBool::new(false));
-    let checker_clone = cancel.clone();
-
     let initial_zips = how_many_zips(&archipelago_dir).unwrap_or_default();
     info!(
         "there appears to be {} previously generated multiworlds",
         initial_zips
     );
 
-    let checker_thread = Arc::new(thread::spawn(move || {
+    let _ = thread::spawn(move || {
         info!("generated games checker started");
-        let cancel = checker_clone;
         let mut max = initial_zips;
         loop {
-            if cancel.load(Ordering::Acquire) {
-                break;
-            }
             if let Ok(msg) = ziprx.recv_timeout(Duration::from_secs(1)) {
                 info!(max, msg);
                 debug_assert!(max <= msg);
                 if msg.gt(&max) {
                     info!(max, msg, "increased");
                     info!("count: {}", msg);
-                    cancel.store(true, Ordering::Release);
                     break;
                 }
                 if msg.lt(&max) {
@@ -105,33 +96,24 @@ fn main() -> Result<()> {
             } else {
                 debug!("timed out on receiving message from worker threads");
             }
-            debug!("parking");
-            // thread::park_timeout(Duration::from_secs(5));
         }
         info!("successfully generated a multiworld, exiting...");
         let _ = signal::kill(Pid::from_raw(0), Signal::SIGINT);
         process::exit(0); // c:
-    }));
+    });
 
     let count_zips_closure = || how_many_zips(&archipelago_dir);
     debug!("starting workers");
     thread::scope(move |scope| {
         for _ in 1..jobs + 1 {
             let ziptx = ziptx.clone();
-            let _cancel = cancel.clone();
-            let cancelled = move || _cancel.load(Ordering::Acquire);
-            let unpark_me = checker_thread.clone();
             let bin = bin.clone();
             scope.spawn(move || loop {
                 let Ok(mut child) = generate_multiworld(&bin) else {
                     error!("subprocess is malformed");
                     continue;
                 };
-                if cancelled() {
-                    info!("stopping subprocess");
-                    let _ = child.kill();
-                    break;
-                }
+
                 debug!("subprocess spawned by worker");
                 let Some(mut stdout) = child.stdout.take() else {
                     error!("could not acquire stdout, stopping subprocess");
@@ -142,23 +124,18 @@ fn main() -> Result<()> {
                 let mut output = String::new();
                 debug!("reading subprocess stdout");
                 let _ = stdout.read_to_string(&mut output);
-                debug!("stdout\n\n{}\n\n", output);
-                if cancelled() {
-                    break;
-                }
+                debug!(output);
                 match count_zips_closure() {
-                    Ok(c) => {
+                    Ok(counted_zips) => {
                         let _ = {
-                            let thread = unpark_me.thread();
-                            // debug!("unparking: {:?}", thread.id());
-                            thread.unpark();
-                            info!(c);
+                            info!(counted_zips);
                             debug!("{}", output);
-                            ziptx.send(c)
+                            ziptx.send(counted_zips)
                         };
                     }
                     Err(e) => {
                         error!(?e);
+                        let _ = child.kill();
                         error!(output)
                     }
                 };
@@ -199,7 +176,6 @@ fn generate_multiworld(bin: &str) -> Result<Child> {
     let mut child = generator?;
     match child.stdin.take() {
         Some(mut stdin) => {
-            // archipelago's Generate.py script is annoying and swallows errors and requires a newline to continue
             let _ = stdin.write_all(b"\n");
         }
         None => {
@@ -211,7 +187,6 @@ fn generate_multiworld(bin: &str) -> Result<Child> {
 
 fn init_tracing() -> Result<()> {
     let _ = dotenvy::dotenv();
-    // temporarily set a subscriber during initialisation
     let subscriber = tracing_subscriber::fmt().pretty().finish();
     let _guard = tracing::subscriber::set_default(subscriber);
 
