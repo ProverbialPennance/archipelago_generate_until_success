@@ -8,6 +8,8 @@ use std::{fs, thread};
 
 use anyhow::Result;
 use clap::Parser;
+use nix::sys::signal::{self, Signal};
+use nix::unistd::Pid;
 use tracing::level_filters::LevelFilter;
 use tracing::{debug, error, info, instrument};
 use tracing_subscriber::layer::SubscriberExt;
@@ -17,13 +19,13 @@ use tracing_subscriber::{fmt, EnvFilter, Registry};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    #[arg(short, long)]
+    #[arg(short, long, value_name = "N", help = "how many worker processess will be spawned", default_value = "16")]
     jobs: Option<u8>,
 
-    #[arg(short, long)]
+    #[arg(short = 'd', long = "dir", value_name = "DIR", help = "the target directory of generate.py")]
     generated_zip_dir: Option<PathBuf>,
 
-    #[arg(short, long)]
+    #[arg(short = 'c', long = "cmd", value_name = "CMD", help = "a path or command that can be used to invoke the archipelago launcher")]
     bin: Option<String>,
 }
 
@@ -31,7 +33,7 @@ fn main() -> Result<()> {
     init_tracing()?;
     let args = Args::parse();
     info!(?args);
-    let jobs = args.jobs.unwrap_or(32);
+    let jobs = args.jobs.unwrap_or(16);
     info!("jobs: {}", jobs);
     let archipelago_dir = args
         .generated_zip_dir
@@ -49,7 +51,7 @@ fn main() -> Result<()> {
         .unwrap_or_else(|| "/run/current-system/sw/bin/archipelago".into());
     info!("archipelago command: '{}'", bin);
 
-    let (tx, rx) = mpsc::sync_channel::<usize>(4_usize * jobs as usize);
+    let (ziptx, ziprx) = mpsc::sync_channel::<usize>(4_usize * jobs as usize);
 
     let cancel = Arc::new(AtomicBool::new(false));
     let checker_clone = cancel.clone();
@@ -68,13 +70,14 @@ fn main() -> Result<()> {
             if cancel.load(Ordering::Acquire) {
                 break;
             }
-            if let Ok(msg) = rx.recv_timeout(Duration::from_secs(1)) {
+            if let Ok(msg) = ziprx.recv_timeout(Duration::from_secs(1)) {
                 info!(max, msg);
-                debug_assert!(max < msg);
+                debug_assert!(max <= msg);
                 if msg.gt(&max) {
-                    info!(max, msg, "icreased");
+                    info!(max, msg, "increased");
                     info!("count: {}", msg);
                     cancel.store(true, Ordering::Release);
+                    break;
                 }
                 if msg.lt(&max) {
                     info!(
@@ -87,18 +90,20 @@ fn main() -> Result<()> {
                 debug!("timed out on receiving message from worker threads");
             }
             debug!("parking");
-            thread::park_timeout(Duration::from_secs(5));
+            // thread::park_timeout(Duration::from_secs(5));
         }
-        info!("successfully generated a multiworld, forcefully exiting...");
-        process::exit(0);
+        info!("successfully generated a multiworld, exiting...");
+        let _ = signal::kill(Pid::from_raw(0), Signal::SIGINT);
+        process::exit(0); // c:
     }));
 
     let count_zips_closure = || how_many_zips(&archipelago_dir);
     debug!("starting workers");
     thread::scope(move |scope| {
         for _ in 1..jobs + 1 {
-            let tx = tx.clone();
-            let cancel = cancel.clone();
+            let ziptx = ziptx.clone();
+            let _cancel = cancel.clone();
+            let cancelled = move || _cancel.load(Ordering::Acquire);
             let unpark_me = checker_thread.clone();
             let bin = bin.clone();
             scope.spawn(move || loop {
@@ -106,8 +111,7 @@ fn main() -> Result<()> {
                     error!("subprocess is malformed");
                     continue;
                 };
-                let cancelled = cancel.load(Ordering::Acquire);
-                if cancelled {
+                if cancelled() {
                     info!("stopping subprocess");
                     let _ = child.kill();
                     break;
@@ -123,8 +127,9 @@ fn main() -> Result<()> {
                 debug!("reading subprocess stdout");
                 let _ = stdout.read_to_string(&mut output);
                 debug!("stdout\n\n{}\n\n", output);
-                debug!("awaiting generator result");
-                let _exit = child.wait();
+                if cancelled() {
+                    break;
+                }
                 match count_zips_closure() {
                     Ok(c) => {
                         let _ = {
@@ -132,8 +137,8 @@ fn main() -> Result<()> {
                             // debug!("unparking: {:?}", thread.id());
                             thread.unpark();
                             info!(c);
-                            info!("{}", output);
-                            tx.send(c)
+                            debug!("{}", output);
+                            ziptx.send(c)
                         };
                     }
                     Err(e) => {
@@ -145,7 +150,7 @@ fn main() -> Result<()> {
         }
         debug!("workers spawned");
     });
-    debug!("workers joined");
+    info!("workers joined");
     Ok(())
 }
 
