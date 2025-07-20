@@ -3,10 +3,6 @@ name = "archipelago_generate_until_success"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name =  "archipelago-generate"
-path = "src/main.rs"
-
 [dependencies]
 anyhow = "1.0.97"
 clap = { version = "4.5.32", features = ["derive"] }
