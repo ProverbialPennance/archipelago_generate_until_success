@@ -49,8 +49,9 @@ struct Args {
         value_name = "ARGS",
         value_parser,
         num_args = 1..,
-        // value_delimiter = ' ',
-        help = "args passed through to generate.py"
+        value_delimiter = ' ',
+        help = "args passed through to generate.py",
+        default_value = "skip_prog_balancing log_time"
     )]
     options: Vec<String>,
 }
@@ -182,6 +183,7 @@ fn generate_multiworld(bin: &str, args: Vec<String>) -> Result<Child> {
         debug!("calling `{bin} \"Generate\"` with args {:?}", args);
         Command::new(bin)
             .arg("Generate")
+            .arg("--")
             .args(args)
             .stderr(Stdio::piped())
             .stdout(Stdio::piped())
