@@ -47,9 +47,12 @@ struct Args {
         short = 'a',
         long = "args",
         value_name = "ARGS",
+        value_parser,
+        num_args = 1..,
+        // value_delimiter = ' ',
         help = "args passed through to generate.py"
     )]
-    options: Option<Vec<String>>,
+    options: Vec<String>,
 }
 
 fn main() -> Result<()> {
@@ -172,10 +175,11 @@ fn how_many_zips(folder: &Path) -> Result<usize> {
 }
 
 #[instrument]
-fn generate_multiworld(bin: &str, args: Option<Vec<String>>) -> Result<Child> {
+fn generate_multiworld(bin: &str, args: Vec<String>) -> Result<Child> {
     debug!("spawning generator");
-    let generator = if let Some(generate_args) = args {
-        let args = Vec::from_iter(generate_args.into_iter().map(|a| format!("--{}", a)));
+    let generator = if !args.is_empty() {
+        let args = Vec::from_iter(args.into_iter().map(|a| format!("--{}", a)));
+        info!("calling `{bin} \"Generate\"` with args {:?}", args);
         Command::new(bin)
             .arg("Generate")
             .args(args)
