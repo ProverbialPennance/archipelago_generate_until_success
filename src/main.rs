@@ -23,7 +23,7 @@ struct Args {
         long,
         value_name = "N",
         help = "how many worker processess will be spawned",
-        default_value = "16"
+        default_value = "4"
     )]
     jobs: Option<u8>,
 
@@ -42,13 +42,21 @@ struct Args {
         help = "a path or command that can be used to invoke the archipelago launcher"
     )]
     bin: Option<String>,
+
+    #[arg(
+        short = 'a',
+        long = "args",
+        value_name = "ARGS",
+        help = "args passed through to generate.py"
+    )]
+    options: Option<Vec<String>>,
 }
 
 fn main() -> Result<()> {
     init_tracing()?;
     let args = Args::parse();
     info!(?args);
-    let jobs = args.jobs.unwrap_or(16);
+    let jobs = args.jobs.unwrap_or(4);
     info!("jobs: {}", jobs);
     let archipelago_dir = args
         .generated_zip_dir
@@ -108,8 +116,9 @@ fn main() -> Result<()> {
         for _ in 1..jobs + 1 {
             let ziptx = ziptx.clone();
             let bin = bin.clone();
+            let passthrough_args = args.options.clone();
             scope.spawn(move || loop {
-                let Ok(mut child) = generate_multiworld(&bin) else {
+                let Ok(mut child) = generate_multiworld(&bin, passthrough_args.clone()) else {
                     error!("subprocess is malformed");
                     continue;
                 };
@@ -163,14 +172,25 @@ fn how_many_zips(folder: &Path) -> Result<usize> {
 }
 
 #[instrument]
-fn generate_multiworld(bin: &str) -> Result<Child> {
+fn generate_multiworld(bin: &str, args: Option<Vec<String>>) -> Result<Child> {
     debug!("spawning generator");
-    let generator = Command::new(bin)
-        .arg("Generate")
-        .stderr(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stdin(Stdio::piped())
-        .spawn();
+    let generator = if let Some(generate_args) = args {
+        let args = Vec::from_iter(generate_args.into_iter().map(|a| format!("--{}", a)));
+        Command::new(bin)
+            .arg("Generate")
+            .args(args)
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()
+    } else {
+        Command::new(bin)
+            .arg("Generate")
+            .stderr(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()
+    };
 
     debug!(?generator);
     let mut child = generator?;
