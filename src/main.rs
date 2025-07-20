@@ -179,7 +179,7 @@ fn generate_multiworld(bin: &str, args: Vec<String>) -> Result<Child> {
     debug!("spawning generator");
     let generator = if !args.is_empty() {
         let args = Vec::from_iter(args.into_iter().map(|a| format!("--{}", a)));
-        info!("calling `{bin} \"Generate\"` with args {:?}", args);
+        debug!("calling `{bin} \"Generate\"` with args {:?}", args);
         Command::new(bin)
             .arg("Generate")
             .args(args)
