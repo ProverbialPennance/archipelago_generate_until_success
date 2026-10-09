@@ -7,6 +7,8 @@ on:
     paths:
       - "**.nix"
       - flake.lock
+      - Cargo.lock
+      - Cargo.toml
       - .github/workflows/*.yml
   merge_group:
   pull_request:
@@ -14,6 +16,8 @@ on:
     paths:
       - "**.nix"
       - flake.lock
+      - Cargo.lock
+      - Cargo.toml
       - .github/workflows/*.yml
   workflow_dispatch:
 
