@@ -43,5 +43,4 @@ jobs:
       - name: build (${{ github.head_ref || github.ref_name }})
         run: |
           set -euxo pipefail
-          nix build .#archipelago_generate_until_success -L \
-          --no-link --print-out-paths | cachix push -l 9 pp-pet-projects
+          nix build -L --no-link --print-out-paths | cachix push -l 9 pp-pet-projects
