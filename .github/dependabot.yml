@@ -12,3 +12,9 @@ updates:
       interval: daily
     commit-message:
       prefix: "nix"
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: "cargo"
