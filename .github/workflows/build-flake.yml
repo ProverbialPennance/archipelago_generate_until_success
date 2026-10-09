@@ -40,7 +40,12 @@ jobs:
         with:
           name: pp-pet-projects
           authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
-      - name: build (${{ github.head_ref || github.ref_name }})
+      - if: env.BRANCH_NAME =! 'main'
+        run: |
+          set -euxo pipefail
+          nix build -L --no-link --print-out-paths
+      - if: env.BRANCH_NAME == 'main'
+        name: build (${{ github.head_ref || github.ref_name }})
         run: |
           set -euxo pipefail
           nix build -L --no-link --print-out-paths | cachix push -l 9 pp-pet-projects
