@@ -36,9 +36,6 @@ jobs:
           extra-conf: |
             trusted-public-keys = cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY= just-one-more-cache.cachix.org-1:4nShcKEgcUEVlJqKFrgDwoGfqLnw5KPG4UDTV02jnr4=
             substituters = https://cache.nixos.org/ https://just-one-more-cache.cachix.org/
-      - uses: yaxitech/nix-install-pkgs-action@v7
-        with:
-          packages: "nixpkgs#omnix, github:juspay/cachix-push"
       - uses: cachix/cachix-action@v17
         with:
           name: pp-pet-projects
@@ -46,4 +43,5 @@ jobs:
       - name: build (${{ github.head_ref || github.ref_name }})
         run: |
           set -euxo pipefail
-          om ci run .#packages -- --show-trace --max-jobs 1 | xargs cachix push -j 2 -l 9 pp-pet-projects
+          nix build .#archipelago_generate_until_success -L \
+          --no-link --print-out-paths | cachix push -l 9 pp-pet-projects
