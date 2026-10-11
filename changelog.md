@@ -1,5 +1,6 @@
 # v0.1.2
 
+Set project edition to `2024`
 bump: anyhow from `1.0.97` to `1.1.104`
 bump: tracing from `0.1.41` to `0.1.44`
 bump: clap from `4.5.60` to `4.6.7`
