@@ -13,7 +13,7 @@ use tracing::level_filters::LevelFilter;
 use tracing::{debug, error, info, instrument};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::{fmt, EnvFilter, Registry};
+use tracing_subscriber::{EnvFilter, Registry, fmt};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -121,37 +121,53 @@ fn main() -> Result<()> {
             let ziptx = ziptx.clone();
             let bin = bin.clone();
             let passthrough_args = args.options.clone();
-            scope.spawn(move || loop {
-                let Ok(mut child) = generate_multiworld(&bin, passthrough_args.clone()) else {
-                    error!("subprocess is malformed");
-                    continue;
-                };
+            scope.spawn(move || {
+                loop {
+                    let Ok(mut child) = generate_multiworld(&bin, passthrough_args.clone()) else {
+                        error!("subprocess is malformed");
+                        continue;
+                    };
 
-                debug!("subprocess spawned by worker");
-                let Some(mut stdout) = child.stdout.take() else {
-                    error!("could not acquire stdout, stopping subprocess");
-                    let _ = child.kill();
-                    continue;
-                };
-                debug!("subprocess' stdout acquired by worker");
-                let mut output = String::new();
-                debug!("reading subprocess stdout");
-                let _ = stdout.read_to_string(&mut output);
-                debug!(output);
-                match count_zips_closure() {
-                    Ok(counted_zips) => {
-                        let _ = {
-                            info!(counted_zips);
-                            debug!("{}", output);
-                            ziptx.send(counted_zips)
-                        };
-                    }
-                    Err(e) => {
-                        error!(?e);
+                    debug!("subprocess spawned by worker");
+                    let Some(mut stdout) = child.stdout.take() else {
+                        error!("could not acquire stdout, stopping subprocess");
                         let _ = child.kill();
-                        error!(output)
-                    }
-                };
+                        continue;
+                    };
+                    let Some(mut stderr) = child.stderr.take() else {
+                        error!("could not acquire stderr, stopping subprocess");
+                        let _ = child.kill();
+                        continue;
+                    };
+                    debug!("subprocess' stdout acquired by worker");
+                    let mut stdout_output = String::new();
+                    debug!("reading subprocess stdout");
+                    let _ = stdout.read_to_string(&mut stdout_output);
+
+                    debug!("subprocess' stderr acquired by worker");
+                    let mut stderr_output = String::new();
+                    debug!("reading subprocess stderr");
+                    let _ = stderr.read_to_string(&mut stderr_output);
+
+                    debug!(stdout_output);
+                    debug!(stderr_output);
+                    match count_zips_closure() {
+                        Ok(counted_zips) => {
+                            let _ = {
+                                info!(counted_zips);
+                                debug!("{}", stdout_output);
+                                error!("{}", stderr_output);
+                                ziptx.send(counted_zips)
+                            };
+                        }
+                        Err(e) => {
+                            error!(?e);
+                            let _ = child.kill();
+                            error!(stdout_output);
+                            error!(stderr_output)
+                        }
+                    };
+                }
             });
         }
         debug!("workers spawned");

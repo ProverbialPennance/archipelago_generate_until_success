@@ -1,3 +1,7 @@
+# v0.1.3
+
+capture `stderr` and output at error log level
+
 # v0.1.2
 
 Set project edition to `2024`
